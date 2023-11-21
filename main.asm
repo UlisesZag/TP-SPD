@@ -23,6 +23,13 @@
     coordenada_cuadrado_y dw 0
     randomColorCuadrado dw 0
 
+    ;Variables de dificultad
+    frame_generador_cuadrado_start dw 128
+    frame_generador_cuadrado_minimo dw 50
+    frame_generador_cuadrado_acelerar dw 2
+    timeout_cuadrados dw 75
+
+
     frameskip_exponent dw 1 ;Frameskip. Para que ande mejor en 3000 hz y coso
 
     ;El array donde se almacentaran todos los cuadrados
@@ -77,6 +84,11 @@
                  db "Paulo Gaston Meira Strazzolini", 0Dh, 0Ah
                  db "Ulises Zagare", 0Dh, 0Ah
                  db "-------------------------------------------------------------------", 0Dh, 0Ah, 24h
+    
+    txt_mensajeGO db "GAME OVER!",0dh, 0ah, 24h
+    txt_gameover_puntaje db "Puntaje: ", 24h
+    txt_ResetGo db "Pulse 'espacio' para reintentar.",0dh, 0ah, 24h
+    txt_msgQ db "Para salir pulse 'q'.",0dh, 0ah, 24h 
 
     ;/////////////////////////////SPRITES/////////////////////////////////////////////
     spr_cursor dw 8,8,4,4
@@ -117,6 +129,7 @@
                        db 15, 14 dup (0), 15
                        db 16 dup (15) 
 
+    
                
 .code
     extrn gfx_init:proc
@@ -141,7 +154,10 @@
 
         call gfx_init
         call game_setup
+    
+    game_set:
         call random_genero_seed
+        call game_reset
 
         ;Genero la cuenta regresiva
         mov ax, 130
@@ -164,25 +180,20 @@
         mov ah, 00h
         int 16h
         cmp al, "q"
-        je fin
+        je cerrar_juego
         cmp al, "Q"
-        je fin
+        je cerrar_juego
 
         mainloop_end:
         inc frame_counter ;Incrementa el contador de frames
         jmp mainloop
 
     gameover:
-    fin:
-        mov ax, 3h  ;Sale del modo grafico
-        int 10h
-
-        mov ah, 9   ;Mensaje de fin
-        mov dx, OFFSET txt_creditos
-        int 21h
-
-        mov ax, 4C00h ;Fin del programa
-        int 21h
+        call game_over_proc
+        jmp game_set
+        
+    cerrar_juego:
+        call game_close
     main endp
 
     game_setup proc
@@ -219,6 +230,28 @@
         pop ax
         ret
     game_setup endp 
+
+    ;Funcion que prepara las variables de juego
+    game_reset proc
+        mov game_over, 0
+        mov vidas, 5
+        mov puntaje, 0
+        mov frame_counter, 0
+        mov ax, frame_generador_cuadrado_start
+        mov FRAME_GENERADOR_CUADRADO, ax
+        mov generador_cuadrados_activado, 0
+
+        mov si, 0
+        game_reset_cleaninstances_loop:
+            cmp instances_array[si], 65535
+            je game_reset_cleaninstances_end
+            mov instances_array[si], 0
+            add si, object_props_bytes
+            jmp game_reset_cleaninstances_loop
+        game_reset_cleaninstances_end:
+
+        ret
+    game_reset endp
 
     game_logic proc
         call mouse_click_handling ;Para sacar que botones estan clickeados del mouse
@@ -317,7 +350,6 @@
         _game_logic_cuadrado_azul_timeout:
         dec vidas
         ;Spawnea una explosion fail
-        ;aca poner sonido wuaaa wuaaa
 
         mov ax, 129
         mov bx, 20
@@ -352,7 +384,6 @@
         mov di, 5
         div di
         add puntaje, ax
-        ;poner sonido wiii
         ;Spawnea una explosion si la toca
         mov ax, 128
         mov bx, 10
@@ -590,20 +621,22 @@
         mov cx,3
         mov dx,0
         div cx
-        add dx,1
+        inc dx
 
         mov randomColorCuadrado, dx
         mov ax, randomColorCuadrado
         mov cx, coordenada_cuadrado_x
         mov dx, coordenada_cuadrado_y
-        mov bx, 90
+        mov bx, timeout_cuadrados
         call game_instance_obj;Crea el cuadrado
 
         ;Se fija si el frame_counter es al menos 60
-        cmp FRAME_GENERADOR_CUADRADO, 60
+        mov ax, frame_generador_cuadrado_minimo
+        cmp FRAME_GENERADOR_CUADRADO, ax
         jbe game_generador_cuadrado_aleatorio_end
 
-        sub FRAME_GENERADOR_CUADRADO, 2
+        mov ax, frame_generador_cuadrado_acelerar
+        sub FRAME_GENERADOR_CUADRADO, ax
         
         game_generador_cuadrado_aleatorio_end:
         inc frame_counter_generator
@@ -615,6 +648,15 @@
         pop ax
     ret
     game_generador_cuadrado_aleatorio endp
+
+    ;Si las vidas son 0: gameover = 1 y pasa a pantalla de game over
+    game_check_gameover proc
+        cmp vidas, 0
+        jne game_check_gameover_end
+        mov game_over, 1
+        game_check_gameover_end:
+        ret
+    game_check_gameover endp
 
     game_draw proc
         ;Espera a que el monitor dibuje un nuevo frame (sirve para los tick tambien)
@@ -638,15 +680,6 @@
         game_draw_end:
         ret
     game_draw endp 
-
-    game_check_gameover proc
-        cmp vidas, 0
-        jne game_check_gameover_end
-        mov game_over, 1
-
-        game_check_gameover_end:
-        ret
-    game_check_gameover endp
 
     draw_instances proc
         push bx
@@ -1011,42 +1044,106 @@
         ret
     draw_cursor endp
 
-    beep_play proc
-    ;funcion que reproduce una nota
-    ;CX = frecuencia de la nota
-    ;BX = duracion
-        push ax
-        push cx
-        push bx
+    game_over_proc proc
+        gameover_screen:
+        call wait_new_vr
+
+        ;Frameskip
+        mov ax, frame_counter
+        mov cx, frameskip_exponent
+        gameover_frameskip_loop:
+            shr ax, 1
+            jc gameover_screen_end
+            loop gameover_frameskip_loop
+
+        call gfx_clear_screen
         
-        in  al, 61h
-        and al, 11111100b
-        out 61h, al
+        ;Mensaje de Game Over
+        mov dl,15
+        mov dh,9
+        call set_cursor_position
+
+        mov ah, 9
+        mov dx, offset txt_mensajeGO
+        int 21h
+
+        ;Mensaje de Puntaje Final
+        mov dl,14
+        mov dh,12
+        call set_cursor_position
+
+        mov ah, 9
+        mov dx, offset txt_gameover_puntaje
+        int 21h
+
+        mov ax, puntaje
+        mov si, OFFSET str_puntaje
+        call strings_word2ascii
+
+        mov ah, 9
+        mov dx, offset str_puntaje
+        int 21h
+
+        ;Mensaje de Reset
+        mov dl,4
+        mov dh,17
+        call set_cursor_position
+
+        mov ah, 9
+        mov dx, offset txt_ResetGo
+        int 21h
+
+        ;Mensaje de salir
+        mov dl,11
+        mov dh,18
+        call set_cursor_position
+
+        mov ah, 9
+        mov dx, offset txt_msgQ
+        int 21h
         
-        mov     ax, cx
+        ;Dibuja el cursor
+        call draw_cursor
 
-        out     42h, al
-        mov     al, ah
-        out     42h, al
-        in      al, 61h
+        ;Hay una tecla presionada o no??
+        mov ah, 01h
+        int 16h
+        jz gameover_screen_end
+        ;Obtiene la tecla presionada por AL
+        mov ah, 00h
+        int 16h
+        ;Tecla espacio presionada?
+        cmp al, 20h
+        je gameover_restart
+        ;Tecla Q/q presionada?
+        cmp al, "q"
+        je gameover_game_close
+        cmp al, "Q"
+        je gameover_game_close
 
-        or      al, 00000011b
-        out     61h, al
-            
-        pop bx
-        pop cx
-        pop ax
+        gameover_screen_end:
+        inc frame_counter
+        jmp gameover_screen
 
+        gameover_game_close:
+        call game_close
+
+        gameover_restart:
         ret
-    beep_play endp
+    game_over_proc endp
 
-    beep_stop proc
-        push ax
+    ;Funcion que cierra el juego
+    game_close proc
+        mov ax, 3h  ;Sale del modo grafico
+        int 10h
 
-        in  al, 61h
-        and al, 11111100b
-        out 61h, al
+        mov ah, 9   ;Mensaje de fin
+        mov dx, OFFSET txt_creditos
+        int 21h
 
-        pop ax
-    beep_stop endp
+        mov ax, 4C00h ;Fin del programa
+        int 21h
+        ret
+    game_close endp 
+
 end
