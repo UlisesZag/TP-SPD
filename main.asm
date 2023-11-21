@@ -7,6 +7,9 @@
 
     game_over dw 0    
 
+    highscore dw 0
+    highscore_achieved dw 0
+
     ;Variables que chequean si el mouse esta cliqueado o no
     mouse_lmb_clicked db 0 ;Boton izquierdo
     mouse_lmb_hold db 0
@@ -85,10 +88,12 @@
                  db "Ulises Zagare", 0Dh, 0Ah
                  db "-------------------------------------------------------------------", 0Dh, 0Ah, 24h
     
-    txt_mensajeGO db "GAME OVER!",0dh, 0ah, 24h
+    txt_mensajeGO db "GAME OVER!",0dh, 0ah, 24h ; j u e g o   s o b r e
     txt_gameover_puntaje db "Puntaje: ", 24h
     txt_ResetGo db "Pulse 'espacio' para reintentar.",0dh, 0ah, 24h
     txt_msgQ db "Para salir pulse 'q'.",0dh, 0ah, 24h 
+    txt_highscore db "Nuevo Highscore Obtenido !!", 24h
+    txt_highscore_anterior db "Highscore: ", 24h
 
     ;/////////////////////////////SPRITES/////////////////////////////////////////////
     spr_cursor dw 8,8,4,4
@@ -234,6 +239,7 @@
     ;Funcion que prepara las variables de juego
     game_reset proc
         mov game_over, 0
+        mov highscore_achieved, 0
         mov vidas, 5
         mov puntaje, 0
         mov frame_counter, 0
@@ -1045,6 +1051,14 @@
     draw_cursor endp
 
     game_over_proc proc
+        ;Calcula el high score
+        mov ax, puntaje
+        cmp highscore, ax
+        jae gameover_screen;Si highscore es mayor o igual que puntaje salta esta parte
+
+        mov highscore, ax
+        mov highscore_achieved, 1
+
         gameover_screen:
         call wait_new_vr
 
@@ -1057,10 +1071,43 @@
             loop gameover_frameskip_loop
 
         call gfx_clear_screen
+
+        call game_over_draw
         
+        ;Dibuja el cursor
+        call draw_cursor
+
+        ;Hay una tecla presionada o no??
+        mov ah, 01h
+        int 16h
+        jz gameover_screen_end
+        ;Obtiene la tecla presionada por AL
+        mov ah, 00h
+        int 16h
+        ;Tecla espacio presionada?
+        cmp al, 20h
+        je gameover_restart
+        ;Tecla Q/q presionada?
+        cmp al, "q"
+        je gameover_game_close
+        cmp al, "Q"
+        je gameover_game_close
+
+        gameover_screen_end:
+        inc frame_counter
+        jmp gameover_screen
+
+        gameover_game_close:
+        call game_close
+
+        gameover_restart:
+        ret
+    game_over_proc endp
+
+    game_over_draw proc
         ;Mensaje de Game Over
         mov dl,15
-        mov dh,9
+        mov dh,7
         call set_cursor_position
 
         mov ah, 9
@@ -1101,36 +1148,41 @@
         mov ah, 9
         mov dx, offset txt_msgQ
         int 21h
+
+        ;Highscore?
+        cmp highscore_achieved, 1 ;Yeeeeee highscoreeee
+        jne gameover_no_highscore
+
+        mov dl,7
+        mov dh,14
+        call set_cursor_position
+
+        mov ah, 9
+        mov dx, offset txt_highscore
+        int 21h
+
+        je gameover_end
+
+        gameover_no_highscore: ;No highscore :(
+        mov dl,12
+        mov dh,14
+        call set_cursor_position
+
+        mov ah, 9
+        mov dx, offset txt_highscore_anterior
+        int 21h
+
+        mov ax, highscore
+        mov si, OFFSET str_puntaje
+        call strings_word2ascii
+
+        mov ah, 9
+        mov dx, offset str_puntaje
+        int 21h
         
-        ;Dibuja el cursor
-        call draw_cursor
-
-        ;Hay una tecla presionada o no??
-        mov ah, 01h
-        int 16h
-        jz gameover_screen_end
-        ;Obtiene la tecla presionada por AL
-        mov ah, 00h
-        int 16h
-        ;Tecla espacio presionada?
-        cmp al, 20h
-        je gameover_restart
-        ;Tecla Q/q presionada?
-        cmp al, "q"
-        je gameover_game_close
-        cmp al, "Q"
-        je gameover_game_close
-
-        gameover_screen_end:
-        inc frame_counter
-        jmp gameover_screen
-
-        gameover_game_close:
-        call game_close
-
-        gameover_restart:
+        gameover_end:
         ret
-    game_over_proc endp
+    game_over_draw endp
 
     ;Funcion que cierra el juego
     game_close proc
