@@ -198,6 +198,8 @@
                 mov cx, ss:[bp+12]
                 cmp dx, ss:[bp+6]
                 je gfx_draw_square_end
+                cmp dx, 199
+                ja gfx_draw_square_end
                 jmp gfx_draw_square_dibujarCuadrado
         
         gfx_draw_square_end:

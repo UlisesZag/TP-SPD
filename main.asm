@@ -82,7 +82,6 @@
     txt_creditos db "----------------- Gracias por jugar Osu del chino -----------------", 0Dh, 0Ah
                  db "Integrantes del grupo 2:", 0Dh, 0Ah
                  db "Carolina Villalba", 0Dh, 0Ah
-                 db "Christian Cavero", 0Dh, 0Ah    
                  db "Nelyer Narvaez", 0Dh, 0Ah
                  db "Paulo Gaston Meira Strazzolini", 0Dh, 0Ah
                  db "Ulises Zagare", 0Dh, 0Ah
@@ -153,12 +152,19 @@
     extrn play_snd_hit:proc
     extrn play_snd_miss:proc
 
+    extrn savefile_load:proc
+    extrn savefile_save:proc
+
     main proc
         mov ax, @data
         mov ds, ax
 
         call gfx_init
         call game_setup
+
+        ;Carga el puntaje alto
+        call savefile_load
+        mov highscore, si
     
     game_set:
         call random_genero_seed
@@ -322,6 +328,8 @@
 
     ;Funcion que maneja el movimiento de los cuadrados
     game_logic_movimiento_cuadrado proc
+
+
         ;Switch.
         cmp word ptr[si+8],0
         je game_logic_movimiento_cuadrado_end
@@ -558,6 +566,11 @@
     ;Si Carry = 0: Colisiona con el mouse
     ;Si Carry = 1: No colisiona con el mouse
     game_logic_cuadrado_colisiones proc
+        push ax
+        push bx
+        push cx
+        push dx
+
         ;Aca la logica de las colisiones
         ;Si colisiona sigue, si no tiene que saltar a game_logic_squares_next
         mov ax, 3 ;Saca las posiciones del mouse (X en CX y Y en DX)
@@ -582,16 +595,32 @@
         ja game_logic_cuadrado_colisiones_NoColisiona
 
         clc
+
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+
         ret
 
         game_logic_cuadrado_colisiones_NoColisiona:
         stc
+
+        pop dx
+        pop cx
+        pop bx
+        pop ax
         ret
 
     game_logic_cuadrado_colisiones endp
 
     ;Funcion de instanciado de objetos.
     ;Busca una entrada tipo 0 en el array y pone lo demas luego
+    ;ax: Tipo
+    ;bx: Contador
+    ;cx: Posicion en X
+    ;dx: Posicion en Y
+    ;di: Movimiento
     game_instance_obj proc
         push si
 
@@ -622,7 +651,11 @@
         ret
     game_instance_obj endp
 
+    ;Destruye un objeto (pone todo en 0)
     game_destroy_obj proc
+        push bx
+        push cx
+
         mov cx, OBJECT_PROPS_BYTES
         mov bx, 0
         _destroy_obj_loop:
@@ -633,6 +666,8 @@
             jmp _destroy_obj_loop
         _destroy_obj_end:
 
+        pop cx
+        pop bx
         ret
     game_destroy_obj endp
 
@@ -1118,6 +1153,10 @@
 
         mov highscore, ax
         mov highscore_achieved, 1
+
+        ;Guarda el savefile
+        mov si, highscore
+        call savefile_save
 
         gameover_screen:
         call wait_new_vr

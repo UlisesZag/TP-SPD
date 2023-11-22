@@ -7,9 +7,10 @@ tasm graphics
 tasm strings
 tasm random
 tasm sound
+tasm savefile
 
 REM Aca compila todo junto en un EXE
-tlink main graphics strings random sound
+tlink main graphics strings random sound savefile
 
 REM --- INTERRUPCION RANDOM ---
 REM Aca el .com de la interrupcion del random
@@ -26,5 +27,5 @@ del INT81RNG.obj
 del INT81RNG.map
 del random.obj
 del sound.obj
-del sound.map
+del savefile.obj
 echo ============================================
