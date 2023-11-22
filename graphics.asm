@@ -185,8 +185,11 @@
             gfx_draw_square_dibujarFila:
                 cmp cx, ss:[bp+8]
                 je gfx_draw_square_ProximaFila
+                cmp cx, 319
+                ja gfx_draw_square_proximoPixel
                 ;cx esta, dx esta. al tambien.
                 call gfx_draw_pixel
+                gfx_draw_square_proximoPixel:
                 inc cx
                 jmp gfx_draw_square_dibujarFila
             

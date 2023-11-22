@@ -42,7 +42,7 @@
     ;2: Posicion en Y del cuadrado
     ;3: Temporizador del cuadrado
 
-    OBJECT_PROPS_BYTES EQU 8 ;Esta constante es la que suman los bucles para contar las propiedades de los objetos
+    OBJECT_PROPS_BYTES EQU 10 ;Esta constante es la que suman los bucles para contar las propiedades de los objetos
                              ;SI AGREGAN PARAMETROS: CAMBIEN EL VALOR A CANTIDAD DE PARAMETROS * 2
 
     ;Tipo 0: No existe objeto
@@ -52,22 +52,22 @@
     ;Tipo 128: Explosion
     ;Tipo 129: Explosion (falla)
     ;Tipo 130: Cuenta regresiva
-    instances_array dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
-                    dw 0,0,0,0
+    instances_array dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
+                    dw 0,0,0,0,0
                     dw 65535
 
     str_puntaje db "00000", 24h
@@ -320,14 +320,67 @@
         ret 
     game_logic endp
 
+    ;Funcion que maneja el movimiento de los cuadrados
+    game_logic_movimiento_cuadrado proc
+        ;Switch.
+        cmp word ptr[si+8],0
+        je game_logic_movimiento_cuadrado_end
+        cmp word ptr[si+8],1
+        je game_logic_movimiento_cuadrado_izquierda
+        cmp word ptr[si+8],2
+        je game_logic_movimiento_cuadrado_derecha
+        cmp word ptr[si+8],3
+        je game_logic_movimiento_cuadrado_arriba
+        cmp word ptr[si+8],4
+        je game_logic_movimiento_cuadrado_abajo
+
+        game_logic_movimiento_cuadrado_izquierda:
+        dec word ptr[si+2]
+        cmp word ptr[si+2], 320
+        jbe game_logic_movimiento_cuadrado_end
+        mov word ptr[si+2], 0
+        mov word ptr[si+8], 2
+        jmp game_logic_movimiento_cuadrado_end
+        
+        game_logic_movimiento_cuadrado_derecha:
+        inc word ptr[si+2]
+        cmp word ptr[si+2], 320
+        jbe game_logic_movimiento_cuadrado_end
+        mov word ptr[si+2], 320
+        mov word ptr[si+8], 1
+        jmp game_logic_movimiento_cuadrado_end
+
+        game_logic_movimiento_cuadrado_arriba:
+        dec word ptr[si+4]
+        cmp word ptr[si+4], 200
+        jbe game_logic_movimiento_cuadrado_end
+        mov word ptr[si+4], 0
+        mov word ptr[si+8], 4
+        jmp game_logic_movimiento_cuadrado_end
+        
+        game_logic_movimiento_cuadrado_abajo:
+        inc word ptr[si+4]
+        cmp word ptr[si+4], 200
+        jbe game_logic_movimiento_cuadrado_end
+        mov word ptr[si+4], 200
+        mov word ptr[si+8], 3
+        jmp game_logic_movimiento_cuadrado_end
+
+        game_logic_movimiento_cuadrado_end:
+        ret
+    game_logic_movimiento_cuadrado endp
+
     game_logic_cuadrado_azul proc
         ;Decrementa el contador
         dec word ptr[si+6]
         cmp word ptr[si+6],0
         je _game_logic_cuadrado_azul_timeout
 
+        call game_logic_movimiento_cuadrado ;Movimiento del cuadrado
+
         call game_logic_cuadrado_colisiones ;Chequea las colisiones
         jc _game_logic_cuadrado_azul_end ;Si no colisiona end
+
 
         ;Se fija si el mouse esta clickeado
         cmp mouse_lmb_clicked, 1
@@ -376,6 +429,8 @@
         dec word ptr[si+6]
         cmp word ptr[si+6],0
         je _game_logic_cuadrado_verde_timeout
+
+        call game_logic_movimiento_cuadrado ;Movimiento del cuadrado
 
         call game_logic_cuadrado_colisiones ;Chequea las colisiones
         jc _game_logic_cuadrado_verde_end ;Si no colisiona end
@@ -426,6 +481,8 @@
         dec word ptr[si+6]
         cmp word ptr[si+6],0
         je _game_logic_cuadrado_rojo_timeout
+
+        call game_logic_movimiento_cuadrado ;Movimiento del cuadrado
 
         call game_logic_cuadrado_colisiones ;Chequea las colisiones
         jc _game_logic_cuadrado_rojo_end ;Si no colisiona end
@@ -549,6 +606,7 @@
             mov word ptr[si+2], cx ;Eje X
             mov word ptr[si+4], dx ;Eje Y
             mov word ptr[si+6], bx ;Contador
+            mov word ptr[si+8], di ;Tipo de movimiento
 
             jmp game_instance_end
         game_instance_next:
@@ -602,24 +660,21 @@
 
         mov frame_counter_generator, 0;Resetea el contador del generador
 
+        ;Coordenada X
         call random_numero
-        mov coordenada_cuadrado_x,ax
-       
-    le_resto1:; aqui me fijo que este en el rango solicitado para x
-        sub coordenada_cuadrado_x,320
-        cmp coordenada_cuadrado_x,20; En el eje x si es menor a 20 y mayor a 300 pixeles me queda incomodo y tengo que volver a generarlo
-        jb le_resto1
-        cmp coordenada_cuadrado_x,300
-        ja le_resto1
-
+        mov bx, 280
+        mov dx, 0
+        div bx
+        add dx, 20 ;en DX queda el resto
+        mov coordenada_cuadrado_x,dx
+        
+        ;Coordenada Y
         call random_numero
-        mov coordenada_cuadrado_y,ax
-    le_resto2:; aqui me fijo que este en el rango solicitado para y
-        sub coordenada_cuadrado_y,200
-        cmp coordenada_cuadrado_y,20; En el eje y si es menor a 20 y mayor a 300 pixeles me queda incomodo y tengo que volver a generarlo
-        jb le_resto2
-        cmp coordenada_cuadrado_y,130
-        ja le_resto2
+        mov bx, 160
+        mov dx, 0
+        div bx
+        add dx, 20
+        mov coordenada_cuadrado_y,dx
 
         call random_numero
 
@@ -628,8 +683,13 @@
         mov dx,0
         div cx
         inc dx
-
         mov randomColorCuadrado, dx
+
+        mov cx, 5
+        mov dx, 0
+        div cx
+        mov di, dx
+
         mov ax, randomColorCuadrado
         mov cx, coordenada_cuadrado_x
         mov dx, coordenada_cuadrado_y
