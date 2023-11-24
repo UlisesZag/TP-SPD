@@ -56,7 +56,7 @@
         mov bx, savefile_handle
         mov cx, 2
         mov dx, OFFSET empty_buffer
-        int 21h
+        int 21h 
 
         ;*si = 0
         mov word ptr[si], 0
@@ -78,12 +78,13 @@
 
     ;Guarda el puntaje alto al archivo guardado
     ;si: Valor del puntaje alto
+    ;Aca sacrificamos la limpieza con pushes porque surgio una cosa rarisima que se freezeaba el programa cuando el IP llegaba a 0E60h  
     public savefile_save
     savefile_save proc
-        push ax
-        push bx
-        push cx
-        push dx
+        ;push ax
+        ;push bx
+        ;push cx
+        ;push dx
 
         ;Intenta abrir el archivo
         mov ah, 3Dh
@@ -138,10 +139,11 @@
         int 21h
 
         savefile_save_end:
-        pop dx
-        pop cx
-        pop bx
-        pop ax
+
+        ;pop dx
+        ;pop cx
+        ;pop bx
+        ;pop ax
         ret
     savefile_save endp
 end

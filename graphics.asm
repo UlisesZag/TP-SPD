@@ -11,6 +11,27 @@
     gfx_sprite_offset_x dw 0
     gfx_sprite_offset_y dw 0
 
+    ;VARIABLES RECTANGULOS GFX
+
+    ;ahora con solo cambiar el offset podemos decidir en que coordenada
+    ;iniciara el rectangulo y que tamaño tendra con solo modificar 
+    ;el largo y el alto, tambien va a ser mas facil convertirlo en una funcion
+
+    ;define coordenadas inicio rect y corrige el resto
+    rectOffsetX dw 0                         
+    rectOffsetY dw 0                           
+                                                
+    ;define tamaño rect                         
+    largo dw 0                              
+    alto dw 0
+
+    ;coordenadas start (+offsetX, +offsetY)
+    posX dw 0
+    posY dw 0
+    ;coordenadas end (las del largo+offsetX y alto+offsetY)
+    posX2 dw 0
+    posY2 dw 0
+
 .code
     public gfx_init
     public gfx_clear_screen
@@ -207,4 +228,134 @@
         pop bp
         ret 10
     gfx_draw_square endp
+
+    ;DIBUJA RECTANGULO VACIO EN COORDENADAS INDICADAS
+    ;posicion de inicio en base rectOffset
+    ;AL color
+    ;SI largo, DI alto
+    ;CX pos X
+    ;DX pos y
+    public gfx_empty_rectangle
+    gfx_empty_rectangle proc
+        push ax
+        push cx
+        push dx
+        push si
+        push di
+
+        mov posX, 0
+        mov posY, 0
+        mov posX2, 0
+        mov posY2, 0
+
+        mov largo, si
+        mov alto, di
+        mov rectOffsetX, cx
+        mov rectOffsetY, dx
+
+        ;especifica coordenadas a partir de offset(posicion) y dimensiones
+        mov si, largo
+        add posX2, si
+        mov si, alto
+        add posY2, si
+
+        mov si, rectOffsetX
+        mov di, rectOffsetY
+        ;coreccion de posicion
+        add largo, si
+        add alto, di
+        add posX, si
+        add posY, di
+        add posX2, si
+        add posY2, di
+
+        ;printa V
+        mov cx, posX ;X pos inicio
+        mov dx, posY ;Y pos inicio
+        ; mov al, 15 ;color
+        printaVLine:
+        ; mov ah, 0ch
+        ; int 10h
+        call gfx_draw_pixel
+        inc dx
+        cmp dx, alto ;largo linea v
+        ja endVLine
+        jmp printaVLine  
+        endVLine:      
+
+        ;printa H
+        mov cx, posX
+        mov dx, posY
+        ; mov al, 15
+        printaHline:
+        ; mov ah, 0ch
+        ; int 10h
+        call gfx_draw_pixel
+        inc cx
+        cmp cx, largo
+        ja endHline
+        jmp printaHline
+        endHline:
+
+        ;printa V2
+        mov cx, posX2 ;X pos inicio
+        mov dx, posY ;Y pos inicio
+        ; mov al, 15 ;color
+        printaV2Line:
+        ; mov ah, 0ch
+        ; int 10h
+        call gfx_draw_pixel
+        inc dx
+        cmp dx, alto ;largo linea v
+        ja endV2Line
+        jmp printaV2Line  
+        endV2Line:      
+
+        ;printa H2
+        mov cx, posX
+        mov dx, posY2
+        ; mov al, 15
+        printaH2line:
+        ; mov ah, 0ch
+        ; int 10h
+        call gfx_draw_pixel
+        inc cx
+        cmp cx, largo
+        ja endH2line
+        jmp printaH2line
+        endH2line:
+
+        pop di
+        pop si
+        pop dx
+        pop cx
+        pop ax
+        ret
+    gfx_empty_rectangle endp
+
+    ;ESCRIBE STRING EN COORDENADAS INDICADAS
+    ;DL column, DH row
+    ;page number is 0 (bh)
+    ;SI contains string offset
+    public gfx_write_s
+    gfx_write_s proc
+        push ax
+        push bx
+        push dx
+        push si
+
+        xor bx, bx
+        mov ah, 2
+        int 10h
+
+        mov ah, 9
+        mov dx, si
+        int 21h
+
+        pop si
+        pop dx
+        pop bx
+        pop ax
+        ret
+    gfx_write_s endp
 end

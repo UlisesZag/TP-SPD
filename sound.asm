@@ -110,4 +110,15 @@ play_snd_miss proc
     ret
 play_snd_miss endp
 
+public play_snd_bounce
+play_snd_bounce proc
+    xor cx,cx
+    xor bx,bx
+    mov cx, 8000
+    mov bx, 20
+    call play
+
+    ret
+play_snd_bounce endp
+
 end

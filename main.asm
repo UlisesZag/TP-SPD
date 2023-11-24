@@ -26,11 +26,26 @@
     coordenada_cuadrado_y dw 0
     randomColorCuadrado dw 0
 
+    ;variable modelo que hay que se podria pasar por stack a la llamada del menu -> determina dificultad
+    gameMode dw 0
+    ;modos de juego:
+    ;0 -> salir
+    ;1 -> facil
+    ;2 -> normal
+    ;3 -> dificil
+
     ;Variables de dificultad
+    dificultad dw 2
+    SKILL_ARRAY_PROPS equ 10
+    skill_array dw 160, 75, 2, 120, 12 ;Facil
+                dw 128, 60, 2, 90, 5 ;Medio
+                dw 100, 45, 2, 70, 3 ;Dificil
+
     frame_generador_cuadrado_start dw 128
-    frame_generador_cuadrado_minimo dw 50
+    frame_generador_cuadrado_minimo dw 40
     frame_generador_cuadrado_acelerar dw 2
     timeout_cuadrados dw 75
+    divisor_score dw 5
 
 
     frameskip_exponent dw 1 ;Frameskip. Para que ande mejor en 3000 hz y coso
@@ -69,13 +84,31 @@
                     dw 0,0,0,0,0
                     dw 0,0,0,0,0
                     dw 65535
-
-    str_puntaje db "00000", 24h
     str_vidas db "00000", 24h
+    str_puntaje db "00000", 24h
+    str_highscore db "00000", 24h
+
+    ;Variables del menu
+
+    clickbox1_data dw 110,210,61,76,0
+    clickbox2_data dw 110,210,85,100,0
+    clickbox3_data dw 110,210,109,124,0
+    clickBox4_data dw 110,210,133,148,0
+    ;Xinicial, Xfinal, Yinicial, Yfinal, ClickStatus (lbm)
+
+    ;clickBoxs del game_mode
+    cb1_gm_data dw 32,107,90,110,0
+    cb2_gm_data dw 121,196,90,110,0
+    cb3_gm_data dw 211,296,90,110,0
+    cb4_gm_data dw 121,196,155,175,0
 
     ;//////////////////////////////STRINGS////////////////////////////////////////////
     txt_gui_vidas db "Vidas: ", 24h
-    txt_gui_puntaje db "    Puntaje: ", 24h
+    txt_gui_puntaje db "Puntaje: ", 24h
+    txt_gui_highscore db "High: ", 24h
+    txt_gui_dificultad_facil db "FACIL", 24h
+    txt_gui_dificultad_normal db "NORMAL", 24h
+    txt_gui_dificultad_dificil db "DIFICIL", 24h
 
     txt_prepare_thyself db "Preparados...", 24h
 
@@ -90,9 +123,34 @@
     txt_mensajeGO db "GAME OVER!",0dh, 0ah, 24h ; j u e g o   s o b r e
     txt_gameover_puntaje db "Puntaje: ", 24h
     txt_ResetGo db "Pulse 'espacio' para reintentar.",0dh, 0ah, 24h
-    txt_msgQ db "Para salir pulse 'q'.",0dh, 0ah, 24h 
+    txt_msgQ db "Pulse 'q' para volver al menu.",0dh, 0ah, 24h 
     txt_highscore db "Nuevo Highscore Obtenido !!", 24h
     txt_highscore_anterior db "Highscore: ", 24h
+
+    ;Menu
+    txt_menu_titulo db "DOSu!",24h
+    txt_menu_play db "Play",24h
+    txt_menu_creditos db "Creditos",24h
+    txt_menu_highScore db "HighScore",24h
+    txt_menu_salir db "Salir",24h
+
+    txt_menu_gameMode_text db "Seleccione modo de juego",24h
+    txt_menu_mode1 db "facil",24h
+    txt_menu_mode2 db "normal",24h
+    txt_menu_mode3 db "dificil",24h
+    txt_menu_mode0 db "volver",24h
+
+    txt_menu_credits db "Proyecto realizado por",24h
+    txt_menu_name1 db "Ulises",24h
+    txt_menu_name2 db "Nelyer",24h
+    txt_menu_name3 db "Caro",24h
+    txt_menu_name4 db "Paulo",24h
+    txt_menu_name5 db "Chris",24h
+    txt_menu_credits_exit db "click to exit",24h
+
+    txt_menu_highScore_text db "Puntaje mas alto obtenido:",24h
+    str_menu_highScore db 5 dup (24h),24h
+    txt_menu_highScore_exit db "click to exit",24h
 
     ;/////////////////////////////SPRITES/////////////////////////////////////////////
     spr_cursor dw 8,8,4,4
@@ -133,14 +191,14 @@
                        db 15, 14 dup (0), 15
                        db 16 dup (15) 
 
-    
-               
 .code
     extrn gfx_init:proc
     extrn gfx_clear_screen:proc
     extrn gfx_draw_pixel:proc
     extrn gfx_draw_sprite:proc
     extrn gfx_draw_square:proc
+    extrn gfx_empty_rectangle:proc
+    extrn gfx_write_s:proc
 
     extrn strings_word2ascii:proc
 
@@ -151,6 +209,7 @@
     extrn play:proc
     extrn play_snd_hit:proc
     extrn play_snd_miss:proc
+    extrn play_snd_bounce:proc
 
     extrn savefile_load:proc
     extrn savefile_save:proc
@@ -165,10 +224,19 @@
         ;Carga el puntaje alto
         call savefile_load
         mov highscore, si
+
+    game_menu:
+        call menu_function
     
     game_set:
         call random_genero_seed
         call game_reset
+
+        ;Pone el mouse en el centro
+        mov ax, 4
+        mov cx, 160
+        mov dx, 100
+        int 33h
 
         ;Genero la cuenta regresiva
         mov ax, 130
@@ -191,15 +259,16 @@
         mov ah, 00h
         int 16h
         cmp al, "q"
-        je cerrar_juego
+        je game_menu
         cmp al, "Q"
-        je cerrar_juego
+        je game_menu
 
         mainloop_end:
         inc frame_counter ;Incrementa el contador de frames
         jmp mainloop
 
     gameover:
+        int 3h
         call game_over_proc
         jmp game_set
         
@@ -244,6 +313,26 @@
 
     ;Funcion que prepara las variables de juego
     game_reset proc
+        push si
+
+        mov ax, gameMode
+        dec ax ; (gameMode = dificultad + 1, 0 es volver al menu)
+        mov bx, SKILL_ARRAY_PROPS
+        mul bx
+        mov si, ax
+
+        mov bx, OFFSET skill_array
+        mov ax, word ptr[bx+si]
+        mov frame_generador_cuadrado_start, ax
+        mov ax, word ptr[bx+si+2]
+        mov frame_generador_cuadrado_minimo, ax
+        mov ax, word ptr[bx+si+4]
+        mov frame_generador_cuadrado_acelerar, ax
+        mov ax, word ptr[bx+si+6]
+        mov timeout_cuadrados, ax
+        mov ax, word ptr[bx+si+8]
+        mov divisor_score, ax
+        
         mov game_over, 0
         mov highscore_achieved, 0
         mov vidas, 5
@@ -262,14 +351,15 @@
             jmp game_reset_cleaninstances_loop
         game_reset_cleaninstances_end:
 
+        pop si
         ret
     game_reset endp
 
     game_logic proc
+        push si
+
         call mouse_click_handling ;Para sacar que botones estan clickeados del mouse
-
         call game_check_gameover
-
         call game_generador_cuadrado_aleatorio
 
         ;Bucle que parsea el array de objetos para dibujarlos
@@ -323,16 +413,13 @@
             jmp game_logic_squares_loop
         game_logic_squares_end:
         
+        pop si
         ret 
     game_logic endp
 
     ;Funcion que maneja el movimiento de los cuadrados
     game_logic_movimiento_cuadrado proc
 
-
-        ;Switch.
-        cmp word ptr[si+8],0
-        je game_logic_movimiento_cuadrado_end
         cmp word ptr[si+8],1
         je game_logic_movimiento_cuadrado_izquierda
         cmp word ptr[si+8],2
@@ -341,6 +428,7 @@
         je game_logic_movimiento_cuadrado_arriba
         cmp word ptr[si+8],4
         je game_logic_movimiento_cuadrado_abajo
+        jmp game_logic_movimiento_cuadrado_end
 
         game_logic_movimiento_cuadrado_izquierda:
         dec word ptr[si+2]
@@ -348,6 +436,7 @@
         jbe game_logic_movimiento_cuadrado_end
         mov word ptr[si+2], 0
         mov word ptr[si+8], 2
+        call play_snd_bounce
         jmp game_logic_movimiento_cuadrado_end
         
         game_logic_movimiento_cuadrado_derecha:
@@ -356,6 +445,7 @@
         jbe game_logic_movimiento_cuadrado_end
         mov word ptr[si+2], 320
         mov word ptr[si+8], 1
+        call play_snd_bounce
         jmp game_logic_movimiento_cuadrado_end
 
         game_logic_movimiento_cuadrado_arriba:
@@ -364,6 +454,7 @@
         jbe game_logic_movimiento_cuadrado_end
         mov word ptr[si+4], 0
         mov word ptr[si+8], 4
+        call play_snd_bounce
         jmp game_logic_movimiento_cuadrado_end
         
         game_logic_movimiento_cuadrado_abajo:
@@ -372,6 +463,7 @@
         jbe game_logic_movimiento_cuadrado_end
         mov word ptr[si+4], 200
         mov word ptr[si+8], 3
+        call play_snd_bounce
         jmp game_logic_movimiento_cuadrado_end
 
         game_logic_movimiento_cuadrado_end:
@@ -397,8 +489,9 @@
         ;Añade el score (contador dividido 5)
         mov dx, 0
         mov ax, word ptr[si+6]
-        mov di, 5
+        mov di, divisor_score
         div di
+        inc ax ;A veces suma 0
         add puntaje, ax
 
         ;Spawnea una explosion si la toca
@@ -450,8 +543,9 @@
         ;Añade el score (contador dividido 5)
         mov dx, 0
         mov ax, word ptr[si+6]
-        mov di, 5
+        mov di, divisor_score
         div di
+        inc ax ;A veces suma 0
         add puntaje, ax
         ;Spawnea una explosion si la toca
         mov ax, 128
@@ -1044,6 +1138,19 @@
         ret
     mouse_click_handling endp
 
+    ;CONTROLA FLANCOS DE MOUSE (QUEDA ATRAPADO EN CICLO HASTA DEJAR DE HACER FALSO CONTACTO)
+    mouse_control proc
+        control_loop:
+
+        call mouse_click_handling
+        cmp mouse_lmb_clicked, 1
+        je control_loop
+        cmp mouse_lmb_hold, 1
+        je control_loop
+
+        ret
+    mouse_control endp
+
     ;Funcion que espera a que la pantalla dibuje un nuevo frame
     ;Para reemplazar el wait_next_tick por tiempo del sistema
     wait_new_vr proc 
@@ -1110,6 +1217,10 @@
         mov dx, OFFSET str_vidas
         int 21h
 
+        mov dl, 11
+        mov dh, 0
+        call set_cursor_position
+
         mov ah, 9
         mov dx, OFFSET txt_gui_puntaje
         int 21h
@@ -1122,6 +1233,54 @@
         mov dx, OFFSET str_puntaje
         int 21h
 
+        ;Highscore
+        mov dl, 26
+        mov dh, 0
+        call set_cursor_position
+
+        mov ah, 9
+        mov dx, OFFSET txt_gui_highscore
+        int 21h
+
+        mov ax, highscore
+        mov si, OFFSET str_highscore
+        call strings_word2ascii
+
+        mov ah, 9
+        mov dx, OFFSET str_highscore
+        int 21h
+
+        ;Dificultad
+        mov dl, 0
+        mov dh, 24
+        call set_cursor_position
+
+        cmp gameMode, 1
+        je draw_gui_dificultad_facil
+        cmp gameMode, 2
+        je draw_gui_dificultad_normal
+        cmp gameMode, 3
+        je draw_gui_dificultad_dificil
+
+        draw_gui_dificultad_facil:
+        mov ah, 9
+        mov dx, OFFSET txt_gui_dificultad_facil
+        int 21h
+        jmp draw_gui_end
+
+        draw_gui_dificultad_normal:
+        mov ah, 9
+        mov dx, OFFSET txt_gui_dificultad_normal
+        int 21h
+        jmp draw_gui_end
+
+        draw_gui_dificultad_dificil:
+        mov ah, 9
+        mov dx, OFFSET txt_gui_dificultad_dificil
+        int 21h
+        jmp draw_gui_end
+
+        draw_gui_end:
         pop si
         pop dx
         pop ax
@@ -1240,7 +1399,7 @@
         int 21h
 
         ;Mensaje de salir
-        mov dl,11
+        mov dl,5
         mov dh,18
         call set_cursor_position
 
@@ -1296,5 +1455,532 @@
         int 21h
         ret
     game_close endp 
+
+    ; ============================= MENU =======================================
+
+    menu_function proc
+        push ax
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+
+        ;MENU
+
+        ;Pone el mouse en el centro
+        mov ax, 4
+        mov cx, 160
+        mov dx, 100
+        int 33h
+
+        menu_loop:
+        draw_menu:
+        call gfx_draw_main_menu
+
+        ;maneja clickboxs
+        mov si, offset clickBox1_data ;BOTON JUGAR (NO IMPLEMENTADO)
+        call custom_clickBox
+        cmp word ptr [si+8], 1
+        je play_game
+
+        mov si, offset clickBox2_data ;BOTON CREDITOS (YA IMPLEMENTADO)
+        call custom_clickBox
+        cmp word ptr [si+8], 1
+        je show_credits
+
+        mov si, offset clickBox3_data ;BOTON HS (NO IMPLEMENTADO)
+        call custom_clickBox
+        je show_highScore
+        cmp word ptr [si+8], 1
+        je show_highScore
+
+        mov si, offset clickBox4_data ;BOTON SALIR (YA IMPLEMENTADA)
+        call custom_clickBox
+        cmp word ptr [si+8], 1
+        je menu_function_close_game
+
+        jmp menu_loop
+        menu_loop_exit:
+
+        ;PLAYGAME
+        play_game:
+        mov word ptr [si+8], 0
+        call play_mode
+        cmp gameMode, 0
+        je draw_menu
+        jmp exit_menu 
+
+        ;CREDITS
+        show_credits:
+        mov word ptr [si+8], 0
+        call credits_menu
+        jmp draw_menu
+
+        ;HS
+        show_highScore:
+        mov word ptr [si+8], 0
+        call show_HS
+        jmp draw_menu
+
+        menu_function_close_game:
+        call game_close ;Cierra el juego
+
+        exit_menu:
+
+        pop di
+        pop si
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+    menu_function endp
+
+    ;DETECTA SI UN CLICK EN DETERMINADAS COORDENADAS
+    ;MOV SI, OFFSET clickBox(N)_data
+    custom_clickBox proc
+        push ax
+        push bx
+        push cx
+        push dx
+        push si
+
+        ;SI contiene el offset del clickBox_data
+
+        ;cuando hagamos la int 33h se destruiran los registros mencionados abajo
+
+        mov ax, 3 ;detecta status del mouse (posicion, clicks)
+        int 33h
+        ;usa AX, BX, CX, DX
+
+        ;no se porque las coordenadas del mouse no son las mismas que las de pixeles
+        ;NOTA: APARENTEMENTE LAS COORDENADAS DE CX EN INT 33H SE MULTIPLICAN POR DOS EN MODO GRAFICO -> MULTIPLICAR POR DOS COORDENAS EN X (SOLO INT 33H)
+
+        ; xInicial    equ 220
+        ; xFinal      equ 420
+        ; yInicial   equ 133
+        ; yFinal     equ 148
+
+        ;verificar si el cursor está en el area
+        cmp cx, [si]
+        jb  end_clickBox_check ;si esta a la izquierda, termina
+        cmp cx, [si+2]
+        ja  end_clickBox_check ;si esta a la derecha, termina
+        cmp dx, [si+4]
+        jb  end_clickBox_check ;si esta arriba, termina
+        cmp dx, [si+6]
+        ja  end_clickBox_check ;si esta abajo, termina
+
+        call mouse_click_handling
+        cmp mouse_lmb_clicked, 1
+        je clickBox_click
+        jmp clickBox_noClick ;esta parte la tengo que terminar y dependera del uso que le queramos dar a la clickBox
+
+        clickBox_click:
+        mov word ptr [si+8], 1
+        jmp end_clickBox_check
+
+        clickBox_noClick:
+
+        end_clickBox_check:
+        pop si
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+    custom_clickBox endp
+
+    ;DIBUJA MENU PRINCIPAL
+    gfx_draw_main_menu proc
+        push ax
+        ;push bx
+        push cx
+        push dx
+        push si
+        push di
+
+        call wait_new_vr
+        call gfx_clear_screen
+        
+        ;dibujar rectangulos
+        mov al, 15
+        mov cx, 110
+        mov dx, 10
+        mov si, 100
+        mov di, 30
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov cx, 110
+        mov dx, 61
+        mov si, 100
+        mov di, 15
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov cx, 110
+        mov dx, 85
+        mov si, 100
+        mov di, 15
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov cx, 110
+        mov dx, 109
+        mov si, 100
+        mov di, 15
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov cx, 110
+        mov dx, 133
+        mov si, 100
+        mov di, 15
+        call gfx_empty_rectangle
+
+        ;dibuja string
+        mov dl, 18
+        mov dh, 2
+        mov si, offset txt_menu_titulo
+        call gfx_write_s
+
+        mov dl, 18
+        mov dh, 8
+        mov si, offset txt_menu_play
+        call gfx_write_s
+
+        mov dl, 16
+        mov dh, 11
+        mov si, offset txt_menu_creditos
+        call gfx_write_s
+        
+        mov dl, 16
+        mov dh, 14
+        mov si, offset txt_menu_highScore
+        call gfx_write_s
+
+        mov dl, 18
+        mov dh, 17
+        mov si, offset txt_menu_salir
+        call gfx_write_s
+
+        call draw_cursor
+
+        pop di
+        pop si
+        pop dx
+        pop cx
+        ;pop bx
+        pop ax
+        ret
+    gfx_draw_main_menu endp
+
+    ;MENU DE CREDITO
+    credits_menu proc
+        push ax
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+
+        mov ax, 2
+        int 33h
+        
+        call mouse_control
+        call gfx_clear_screen
+    
+        ;DIBUJA CREDITOS
+
+        mov al, 15
+        mov si, 280
+        mov di, 180
+        mov cx, 20
+        mov dx, 10
+        call gfx_empty_rectangle
+
+        ;maximos 39 columns y 24 row (wtf)
+        mov si, offset txt_menu_credits
+        mov dl, 9
+        mov dh, 5
+        call gfx_write_s
+        mov si, offset txt_menu_name1
+        mov dl, 16
+        mov dh, 8
+        call gfx_write_s
+        mov si, offset txt_menu_name2
+        mov dl, 16
+        mov dh, 10
+        call gfx_write_s
+        mov si, offset txt_menu_name3
+        mov dl, 16
+        mov dh, 12
+        call gfx_write_s
+        mov si, offset txt_menu_name4
+        mov dl, 16
+        mov dh, 14
+        call gfx_write_s
+        mov si, offset txt_menu_name5
+        mov dl, 16
+        mov dh, 16
+        call gfx_write_s
+        mov si, offset txt_menu_credits_exit
+        mov dl, 13
+        mov dh, 20
+        call gfx_write_s
+
+        credits_loop:   ;no se si sigue haciendo falta pero lo dejo ahi
+        call mouse_click_handling
+        cmp mouse_lmb_clicked, 1
+        je exit_credits_menu  
+        jmp credits_loop
+
+        exit_credits_menu:
+
+        call mouse_control
+
+        ; mov ax, 0
+        ; int 33h
+
+        call gfx_clear_screen
+
+        call gfx_draw_main_menu
+
+        pop di
+        pop si
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+    credits_menu endp
+
+    show_HS proc
+        push ax
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+
+        mov ax, 2
+        int 33h
+        
+        call mouse_control
+        call gfx_clear_screen
+    
+        ;DIBUJA HS
+
+        mov al, 15
+        mov si, 280
+        mov di, 180
+        mov cx, 20
+        mov dx, 10
+        call gfx_empty_rectangle
+
+        ;maximos 39 columns y 24 row (wtf)
+        mov si, offset txt_menu_highScore_text
+        mov dl, 7
+        mov dh, 5
+        call gfx_write_s
+
+        mov ax, highscore
+        mov si, OFFSET str_menu_highScore
+        call strings_word2ascii
+        
+        mov si, offset str_menu_highScore
+        mov dl, 18
+        mov dh, 11
+        call gfx_write_s
+
+        mov si, offset txt_menu_highScore_exit
+        mov dl, 13
+        mov dh, 20
+        call gfx_write_s
+
+        HS_loop:   ;no se si sigue haciendo falta pero lo dejo ahi
+        call mouse_click_handling
+        cmp mouse_lmb_clicked, 1
+        je exit_HS_menu  
+        jmp HS_loop
+
+        exit_HS_menu:
+
+        call mouse_control
+
+        ; mov ax, 0
+        ; int 33h
+
+        call gfx_clear_screen
+
+        call gfx_draw_main_menu       
+
+        pop di
+        pop si
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+    show_HS endp
+
+    play_mode proc
+        push ax
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+
+        mov ax, 4
+        mov cx, 160
+        mov dx, 80
+        int 33h
+        
+        draw_play_mode_menu:
+        call wait_new_vr
+        call gfx_clear_screen
+    
+        ;DIBUJA GAMEMODE
+        mov al, 15
+        mov si, 280
+        mov di, 180
+        mov cx, 20
+        mov dx, 10
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov si, 75
+        mov di, 20
+        mov cx, 32
+        mov dx, 90
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov si, 75
+        mov di, 20
+        mov cx, 121
+        mov dx, 90
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov si, 75
+        mov di, 20
+        mov cx, 211
+        mov dx, 90
+        call gfx_empty_rectangle
+
+        mov al, 15
+        mov si, 75
+        mov di, 20
+        mov cx, 121
+        mov dx, 155
+        call gfx_empty_rectangle
+
+        ;maximos 39 columns y 24 row (wtf)
+        mov si, offset txt_menu_gameMode_text
+        mov dl, 8
+        mov dh, 5
+        call gfx_write_s
+
+        mov si, offset txt_menu_mode1
+        mov dl, 6
+        mov dh, 12
+        call gfx_write_s
+
+        mov si, offset txt_menu_mode2
+        mov dl, 17
+        mov dh, 12
+        call gfx_write_s
+
+        mov si, offset txt_menu_mode3
+        mov dl, 28
+        mov dh, 12
+        call gfx_write_s
+
+        mov si, offset txt_menu_mode0
+        mov dl, 17
+        mov dh, 20
+        call gfx_write_s
+
+        call draw_cursor
+
+        ;Parte de la logica (colisiones y asignar)
+        ;call mouse_control
+
+        mov si, offset cb1_gm_data
+        call custom_clickBox
+        cmp word ptr [si+8], 1
+        je gamemode_1
+
+        mov si, offset cb2_gm_data
+        call custom_clickBox
+        cmp word ptr [si+8], 1
+        je gamemode_2
+
+        mov si, offset cb3_gm_data
+        call custom_clickBox
+        cmp word ptr [si+8], 1
+        je gamemode_3
+
+        mov si, offset cb4_gm_data
+        call custom_clickBox
+        cmp word ptr [si+8], 1
+        je gamemode_4
+
+        jmp draw_play_mode_menu
+
+        fin_m_loop:
+
+        gamemode_1:
+        mov word ptr [si+8], 0
+        mov si, offset gameMode
+        mov word ptr [si], 1
+        jmp GM_loop
+
+        gamemode_2:
+        mov word ptr [si+8], 0
+        mov si, offset gameMode
+        mov word ptr [si], 2
+        jmp GM_loop
+
+        gamemode_3:
+        mov word ptr [si+8], 0
+        mov si, offset gameMode
+        mov word ptr [si], 3
+        jmp GM_loop
+
+        gamemode_4:
+        mov word ptr [si+8], 0
+        mov si, offset gameMode
+        mov word ptr [si], 0
+        jmp GM_loop
+
+        GM_loop:   ;no se si sigue haciendo falta pero lo dejo ahi
+        call mouse_click_handling
+        cmp mouse_lmb_clicked, 1
+        je exit_GM_menu  
+        jmp GM_loop
+
+        exit_GM_menu:
+
+        ;call mouse_control
+        mov ax, 0
+        int 33h
+
+        call gfx_clear_screen
+
+        call gfx_draw_main_menu       
+
+        pop di
+        pop si
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+    play_mode endp
 
 end
