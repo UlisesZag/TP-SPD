@@ -487,6 +487,8 @@
         call mouse_click_handling
         cmp mouse_lmb_clicked, 1
         je exit_credits_menu  
+
+        inc frame_counter ; Esto para que funcione el frameskip (el frame_counter se resetea en la funcion game_restart)
         jmp credits_loop
 
         exit_credits_menu:

@@ -71,6 +71,36 @@
         ret
     gfx_clear_screen endp
 
+    ;Funcion que espera a que la pantalla dibuje un nuevo frame
+    ;Para reemplazar el wait_next_tick por tiempo del sistema
+    public wait_new_vr
+    wait_new_vr proc 
+        push ax
+        push dx
+
+        waitForNewVR:
+        mov dx, 3dah
+
+        ;Wait for bit 3 to be zero (not in VR).
+        ;We want to detect a 0->1 transition.
+        _waitForEnd:
+        in al, dx
+        test al, 08h
+        jnz _waitForEnd
+
+        ;Wait for bit 3 to be one (in VR)
+        _waitForNew:
+        in al, dx
+        test al, 08h
+        jz _waitForNew
+
+        pop dx
+        pop ax
+
+        ret
+
+    wait_new_vr endp
+
     ;Funcion que dibuja un pixel en pantalla
     ;CX: Posicion en X del pixel
     ;DX: Posicion en Y del pixel

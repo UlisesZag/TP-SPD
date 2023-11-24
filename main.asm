@@ -103,6 +103,9 @@
     cb4_gm_data dw 121,196,155,175,0
 
     ;//////////////////////////////STRINGS////////////////////////////////////////////
+    txt_welcome_to_dosu db "                                Welcome to DOSu!                                ", 0Dh, 0Ah
+                        db "                             - Click the Squares -                              ", 0Dh, 0Ah, 24h
+
     txt_gui_vidas db "Vidas: ", 24h
     txt_gui_puntaje db "Puntaje: ", 24h
     txt_gui_highscore db "High: ", 24h
@@ -199,6 +202,7 @@
     extrn gfx_draw_square:proc
     extrn gfx_empty_rectangle:proc
     extrn gfx_write_s:proc
+    extrn wait_new_vr:proc
 
     extrn strings_word2ascii:proc
 
@@ -210,6 +214,8 @@
     extrn play_snd_hit:proc
     extrn play_snd_miss:proc
     extrn play_snd_bounce:proc
+    extrn play_snd_select:proc
+    extrn play_snd_welcome_to_dosu:proc
 
     extrn savefile_load:proc
     extrn savefile_save:proc
@@ -217,6 +223,11 @@
     main proc
         mov ax, @data
         mov ds, ax
+
+        mov ah, 9
+        mov dx, OFFSET txt_welcome_to_dosu
+        int 21h
+        call play_snd_welcome_to_dosu
 
         call gfx_init
         call game_setup
@@ -270,7 +281,9 @@
     gameover:
         int 3h
         call game_over_proc
-        jmp game_set
+        cmp ax, 0 ;Si ax = 0: reinicia la partida
+        je game_set ;Si ax = 1: menu
+        jmp game_menu
         
     cerrar_juego:
         call game_close
@@ -1151,35 +1164,6 @@
         ret
     mouse_control endp
 
-    ;Funcion que espera a que la pantalla dibuje un nuevo frame
-    ;Para reemplazar el wait_next_tick por tiempo del sistema
-    wait_new_vr proc 
-        push ax
-        push dx
-
-        waitForNewVR:
-        mov dx, 3dah
-
-        ;Wait for bit 3 to be zero (not in VR).
-        ;We want to detect a 0->1 transition.
-        _waitForEnd:
-        in al, dx
-        test al, 08h
-        jnz _waitForEnd
-
-        ;Wait for bit 3 to be one (in VR)
-        _waitForNew:
-        in al, dx
-        test al, 08h
-        jz _waitForNew
-
-        pop dx
-        pop ax
-
-        ret
-
-    wait_new_vr endp
-
     ;Funcion que mueve el cursor de texto a una posicion en especifico
     ;INPUT : DL=X, DH=Y.
     set_cursor_position proc
@@ -1304,7 +1288,14 @@
         ret
     draw_cursor endp
 
+    ;Pantalla de game over
+    ; Devuelve por ax la opcion seleccionada
+    ;  ax = 0: Reintentar
+    ;  ax = 1: Volver al menu
     game_over_proc proc
+        
+        push cx
+        push si
         ;Calcula el high score
         mov ax, puntaje
         cmp highscore, ax
@@ -1356,9 +1347,16 @@
         jmp gameover_screen
 
         gameover_game_close:
-        call game_close
+        mov ax, 1
+        jmp game_over_proc_end
 
         gameover_restart:
+        mov ax, 0
+
+        game_over_proc_end:
+        pop si
+        pop cx
+        
         ret
     game_over_proc endp
 
@@ -1475,7 +1473,6 @@
         int 33h
 
         menu_loop:
-        draw_menu:
         call gfx_draw_main_menu
 
         ;maneja clickboxs
@@ -1500,30 +1497,36 @@
         cmp word ptr [si+8], 1
         je menu_function_close_game
 
+        inc frame_counter ;Esto para que funcione el frameskip (frame_counter es reseteado con la funcion game_reset)
+
         jmp menu_loop
         menu_loop_exit:
 
         ;PLAYGAME
         play_game:
         mov word ptr [si+8], 0
+        call play_snd_select
         call play_mode
         cmp gameMode, 0
-        je draw_menu
+        je menu_loop
         jmp exit_menu 
 
         ;CREDITS
         show_credits:
         mov word ptr [si+8], 0
+        call play_snd_select
         call credits_menu
-        jmp draw_menu
+        jmp menu_loop
 
         ;HS
         show_highScore:
         mov word ptr [si+8], 0
+        call play_snd_select
         call show_HS
-        jmp draw_menu
+        jmp menu_loop
 
         menu_function_close_game:
+        call play_snd_select
         call game_close ;Cierra el juego
 
         exit_menu:
@@ -1602,6 +1605,15 @@
         push di
 
         call wait_new_vr
+
+        ;Frameskip
+        mov ax, frame_counter
+        mov cx, frameskip_exponent
+        gfx_draw_main_menu_frameskip_loop:
+            shr ax, 1
+            jc gfx_draw_main_menu_end
+            loop gfx_draw_main_menu_frameskip_loop
+
         call gfx_clear_screen
         
         ;dibujar rectangulos
@@ -1612,31 +1624,31 @@
         mov di, 30
         call gfx_empty_rectangle
 
-        mov al, 15
-        mov cx, 110
+        ;mov al, 15
+        ;mov cx, 110
         mov dx, 61
-        mov si, 100
+        ;mov si, 100
         mov di, 15
         call gfx_empty_rectangle
 
-        mov al, 15
-        mov cx, 110
+        ;mov al, 15
+        ;mov cx, 110
         mov dx, 85
-        mov si, 100
+        ;mov si, 100
         mov di, 15
         call gfx_empty_rectangle
 
-        mov al, 15
-        mov cx, 110
+        ;mov al, 15
+        ;mov cx, 110
         mov dx, 109
-        mov si, 100
+        ;mov si, 100
         mov di, 15
         call gfx_empty_rectangle
 
-        mov al, 15
-        mov cx, 110
+        ;mov al, 15
+        ;mov cx, 110
         mov dx, 133
-        mov si, 100
+        ;mov si, 100
         mov di, 15
         call gfx_empty_rectangle
 
@@ -1668,6 +1680,7 @@
 
         call draw_cursor
 
+        gfx_draw_main_menu_end:
         pop di
         pop si
         pop dx
@@ -1738,8 +1751,8 @@
         jmp credits_loop
 
         exit_credits_menu:
-
         call mouse_control
+        call play_snd_select
 
         ; mov ax, 0
         ; int 33h
@@ -1809,9 +1822,7 @@
         exit_HS_menu:
 
         call mouse_control
-
-        ; mov ax, 0
-        ; int 33h
+        call play_snd_select
 
         call gfx_clear_screen
 
@@ -1841,6 +1852,15 @@
         
         draw_play_mode_menu:
         call wait_new_vr
+
+        ;Frameskip
+        mov ax, frame_counter
+        mov cx, frameskip_exponent
+        play_mode_frameskip_loop:
+            shr ax, 1
+            jc logic_play_mode_menu
+            loop play_mode_frameskip_loop
+
         call gfx_clear_screen
     
         ;DIBUJA GAMEMODE
@@ -1851,30 +1871,30 @@
         mov dx, 10
         call gfx_empty_rectangle
 
-        mov al, 15
+        ;mov al, 15
         mov si, 75
         mov di, 20
         mov cx, 32
         mov dx, 90
         call gfx_empty_rectangle
 
-        mov al, 15
+        ;mov al, 15
         mov si, 75
         mov di, 20
         mov cx, 121
-        mov dx, 90
+        ;mov dx, 90
         call gfx_empty_rectangle
 
-        mov al, 15
+        ;mov al, 15
         mov si, 75
         mov di, 20
         mov cx, 211
-        mov dx, 90
+        ;mov dx, 90
         call gfx_empty_rectangle
 
-        mov al, 15
+        ;mov al, 15
         mov si, 75
-        mov di, 20
+        ;mov di, 20
         mov cx, 121
         mov dx, 155
         call gfx_empty_rectangle
@@ -1910,6 +1930,7 @@
         ;Parte de la logica (colisiones y asignar)
         ;call mouse_control
 
+        logic_play_mode_menu:
         mov si, offset cb1_gm_data
         call custom_clickBox
         cmp word ptr [si+8], 1
@@ -1929,6 +1950,8 @@
         call custom_clickBox
         cmp word ptr [si+8], 1
         je gamemode_4
+
+        inc frame_counter ;Esto para que funcione el frameskip (frame_counter es reseteado con la funcion game_reset)
 
         jmp draw_play_mode_menu
 
@@ -1965,13 +1988,13 @@
         jmp GM_loop
 
         exit_GM_menu:
+        call play_snd_select
 
         ;call mouse_control
         mov ax, 0
         int 33h
 
         call gfx_clear_screen
-
         call gfx_draw_main_menu       
 
         pop di

@@ -41,84 +41,116 @@
 
 .code
 
-public play
-play proc
-    play:
-    push ax
-    push cx
-    push bx
-    mov     ax, cx
+    public play
+    play proc
+        play:
+        push ax
+        push cx
+        push bx
+        mov     ax, cx
 
-    out     42h, al
-    mov     al, ah
-    out     42h, al
-    in      al, 61h
+        out     42h, al
+        mov     al, ah
+        out     42h, al
+        in      al, 61h
 
-    or      al, 00000011b
-    out     61h, al
+        or      al, 00000011b
+        out     61h, al
 
-    pause1:
-        mov cx, 65535
+        pause1:
+            mov cx, 65535
 
-    pause2:
-        dec cx
-        jne pause2
-        dec bx
-        jne pause1
+        pause2:
+            dec cx
+            jne pause2
+            dec bx
+            jne pause1
 
-        in  al, 61h
-        and al, 11111100b
-        out 61h, al
-        
-    pop bx
-    pop cx
-    pop ax
+            in  al, 61h
+            and al, 11111100b
+            out 61h, al
+            
+        pop bx
+        pop cx
+        pop ax
 
-    ret
-play endp
+        ret
+    play endp
 
-public play_snd_hit
-play_snd_hit proc
-    xor cx,cx
-    mov cx, 1200       
-    mov bx, 30
-    call play
+    public play_snd_hit
+    play_snd_hit proc
+        mov cx, 1200       
+        mov bx, 30
+        call play
 
-    xor cx,cx
-    xor bx, bx
-    mov cx, 1560      
-    mov bx, 25
-    call play
+        mov cx, 1560      
+        mov bx, 25
+        call play
 
-    ret 
-play_snd_hit endp
+        ret 
+    play_snd_hit endp
 
-public play_snd_miss
-play_snd_miss proc
-    xor cx,cx
-    xor bx,bx
-    mov cx, 9340
-    mov bx, 35
-    call play
+    public play_snd_miss
+    play_snd_miss proc
+        mov cx, 9340
+        mov bx, 35
+        call play
 
-    xor cx,cx
-    xor bx,bx
-    mov cx, 8450
-    mov bx, 25
-    call play
+        mov cx, 8450
+        mov bx, 25
+        call play
 
-    ret
-play_snd_miss endp
+        ret
+    play_snd_miss endp
 
-public play_snd_bounce
-play_snd_bounce proc
-    xor cx,cx
-    xor bx,bx
-    mov cx, 8000
-    mov bx, 20
-    call play
+    public play_snd_bounce
+    play_snd_bounce proc
+        mov cx, 8000
+        mov bx, 20
+        call play
 
-    ret
-play_snd_bounce endp
+        ret
+    play_snd_bounce endp
 
+    public play_snd_select
+    play_snd_select proc
+        mov cx, 1000
+        mov bx, 15
+        call play
+
+        ret
+    play_snd_select endp
+
+    public play_snd_welcome_to_dosu
+    play_snd_welcome_to_dosu proc
+        mov cx, 1809
+        mov bx, 100
+        call play
+
+        mov cx, 2031
+        mov bx, 100
+        call play
+
+        mov cx, 2711
+        mov bx, 100
+        call play
+
+        mov cx, 3043
+        mov bx, 100
+        call play
+
+        mov cx, 4063
+        mov bx, 100
+        call play
+
+        mov cx, 3619
+        mov bx, 300
+        call play
+
+        mov cx, 3224
+        mov bx, 500
+        call play
+
+        ret
+    play_snd_welcome_to_dosu endp
 end
